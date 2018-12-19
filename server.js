@@ -20,13 +20,7 @@ app.get('/', function (req, res) {
 
   const data = `0x${new Date().getTime()}`
   messageStore[account || DEFAUTL_PUBLIC_ADDR] = data
-  const message = JSON.stringify({
-    type: 'TwoFactorAuthentication',
-    data: data
-  })
-  // console.log('產生訊息 => ' + data)
-
-  locals.qrPath = `/qrcode?qrurl=${message}`
+  locals.message = data
   locals.account = `${account || DEFAUTL_PUBLIC_ADDR}`
   locals.result = ''
 
@@ -35,19 +29,26 @@ app.get('/', function (req, res) {
 
 
 app.get('/verify', function (req, res) {
-  const { signature, from } = req.query;
+  const { signature, from, socketId } = req.query;
   let Verified = 'fail'
-  
-  if (signature && from && messageStore[from]) {
+  console.log('有拿到嗎？' + socketId)
+   
+  if (signature
+    && from
+    && messageStore[from]
+    && from === conTable[socketId]
+  ) {
     // 簽名：signature
     // public addr：from
+    // socketId : socketId
     // qrcode message：messageStore[from]
     
-    const data = messageStore[from];
-    const signature1 = ethUtil.toBuffer(signature)
+    // const data = messageStore[from];
+    const data = messageStore[conTable[socketId]]; //拿 server 當時產稱的 message
+    const signatureBuffered = ethUtil.toBuffer(signature)
     const message = ethUtil.toBuffer(data)
     const msgHash = ethUtil.hashPersonalMessage(message)
-    const sigParams = ethUtil.fromRpcSig(signature1)
+    const sigParams = ethUtil.fromRpcSig(signatureBuffered)
     const publicKey = ethUtil.ecrecover(
       msgHash,
       sigParams.v,
@@ -56,35 +57,49 @@ app.get('/verify', function (req, res) {
     )
     const sender = ethUtil.publicToAddress(publicKey)
     const addr = ethUtil.bufferToHex(sender)
-
-    if (addr !== messageStore[from]) {
+    // if (addr !== messageStore[from]) {
+    // server 所記錄 socketId 對應的 public addr比較
+    if (addr !== conTable[socketId]) {
       console.log('驗證失敗')
       Verified = 'fail'
-      res.send('Failed to verify');
+      res
+        .status(401)
+        .send('Failed to verify')
+        .end();
     } else {
       console.log('驗證成功。')
       Verified = 'success'
-      res.send('Verified');
+      res
+        .status(200)
+        .send('Verified')
     }
-
+  } else {
+    console.log('驗證失敗')
+    Verified = 'fail'
+    res
+      .status(401)
+      .send('Failed to verify');
   }
   
-  const target = Object
-    .entries(conTable)
-    .find(([socketId, userAccount], ) => userAccount === from)
-  console.log(target)
-  if (target && target.length > 0) {
-    io.sockets.connected[target[0]].emit(
+  if (conTable[socketId]) {
+    io.sockets.connected[socketId].emit(
       'verify',
       Verified,
     );
   }
   res.end();
-
 });
 
 app.get('/qrcode', function(req, res) {
-  var code = qr.image(req.query.qrurl, { type: 'png' });
+  const { data, socketId } = JSON.parse(req.query.qrurl);
+  const code = qr.image(
+    JSON.stringify({
+      data,
+      socketId,
+      type: 'TwoFactorAuthentication'
+    }),
+    { type: 'png' }
+  );
   res.type('png');
   code.pipe(res);
 });
@@ -93,11 +108,12 @@ io.on('connection', function (socket) {
   console.log("一位使用者已連接. Socket id = ", socket.id);
 
   socket.on('join', function (userAccount) {
-    // console.log('account => ' + userAccount)
-    // console.log('join 的 id => ' + socket.id)
-    if (conTable[socket.id] === undefined) {
-      conTable[socket.id] = userAccount;
-    }
+    conTable[socket.id] = userAccount;
+
+    io.sockets.connected[socket.id].emit(
+      'getSocketId',
+      socket.id,
+    );
   });
 
   socket.on('leave', function (rooms) {
@@ -115,8 +131,11 @@ io.on('connection', function (socket) {
       delete conTable[socket.id];
     }
   });
-}); 
+});
 
+app.get('/verifyHost', function (req, res) {
+  res.sendStatus(200);
+})
 const port = process.env.PORT || 8088
 
 http.listen(port, function () {

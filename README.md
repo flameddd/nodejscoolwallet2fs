@@ -1,6 +1,7 @@
 ## install
  1. npm install
- 2. visited: `localhost:8088`
+ 2. npm start
+ 3. visited: `localhost:8088`
 
 ## steps
  - 調整 `server.js` 裡面的 `DEFAUTL_PUBLIC_ADDR` 變數是否為測試的 public address
@@ -15,3 +16,8 @@
  - 掃描 qrcode
  - （確保輸入了 server 的位置）
  - `簽名`
+
+## //localtunnel.me
+利用些工具可以 expore LAN network 出去
+> npm install -g localtunnel
+> lt --port 8088

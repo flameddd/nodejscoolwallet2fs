@@ -12,7 +12,6 @@ html(lang='en')
         languages: ['js']
       })
       $(document).ready(function() {
-
         var socket = io()
         socket.emit('join', $('#userAccount').val());
         socket.on('verify', function(result) {
@@ -29,6 +28,13 @@ html(lang='en')
             $('#rejectmark').css('display', 'none');
           }
         });
+        socket.on('getSocketId', function(socketId) {
+          const qrPath = JSON.stringify({
+            data: $('#message').val(),
+            socketId: socketId,
+          })
+          $('#qrPath').attr('src', '/qrcode?qrurl=' + qrPath);
+        })
       });
     style(type='text/css').
       svg {
@@ -101,8 +107,9 @@ html(lang='en')
       .row
         .col-md-6
           input#userAccount(type='text' value=account style="display: none;")
-          img(src=qrPath, style='display: block; width: 200px;margin: auto;', width="200")
-          
+          input#message(type='text' value=message style="display: none;")
+          img#qrPath(src="", style='display: block; width: 200px;margin: auto;', width="200")
+
         .col-md-6
           div#result(style='font-size: 30pt; font-family: Monaco, Inconsolata, Consolas, Helvetica, sans-serif;width: 200px;margin: auto;')=result
           svg#checkmark(version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 130.2 130.2" style="display: none;")
